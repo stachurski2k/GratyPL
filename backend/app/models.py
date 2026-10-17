@@ -1,10 +1,21 @@
 import uuid
 from datetime import date, datetime
 
-from geoalchemy2 import Geography
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Text, func
+from geoalchemy2 import Geography, Geometry
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+    cast,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, column_property, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -22,6 +33,9 @@ class Report(Base):
     location = mapped_column(
         Geography(geometry_type="POINT", srid=4326, spatial_index=False), nullable=False
     )
+    # Współrzędne wyliczane przez PostGIS przy każdym odczycie (tylko do odczytu).
+    lng: Mapped[float] = column_property(func.ST_X(cast(location, Geometry)))
+    lat: Mapped[float] = column_property(func.ST_Y(cast(location, Geometry)))
     description: Mapped[str | None] = mapped_column(Text)
     has_plates: Mapped[bool | None] = mapped_column(Boolean)
     source: Mapped[str] = mapped_column(Text, nullable=False, default="web")

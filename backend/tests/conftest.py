@@ -36,14 +36,38 @@ def db(engine):
         yield session
 
 
+@pytest.fixture(autouse=True)
+def media_root(tmp_path, monkeypatch):
+    from app.config import settings
+
+    root = tmp_path / "media"
+    monkeypatch.setattr(settings, "media_root", root)
+    return root
+
+
 @pytest.fixture
-def client(db, tmp_path, monkeypatch):
-    from app import config
+def client(db, media_root):
     from app.db import get_session
     from app.main import create_app
 
-    monkeypatch.setattr(config.settings, "media_root", tmp_path / "media")
     app = create_app()
     app.dependency_overrides[get_session] = lambda: db
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture
+def make_report(db):
+    """Tworzy zgłoszenie przez serwis (ta sama ścieżka co upload)."""
+    from app.schemas import Point
+    from app.services import reports
+    from app.services.media import PhotoUpload
+    from tests.images import make_image
+
+    def _make(lng=18.67, lat=50.29, created_at=None, **kwargs):
+        photos = [PhotoUpload("a.jpg", make_image(size=(64, 48)))]
+        return reports.create_report(
+            db, photos, location=Point(lng=lng, lat=lat), created_at=created_at, **kwargs
+        )
+
+    return _make
