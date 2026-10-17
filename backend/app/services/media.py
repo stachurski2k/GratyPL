@@ -127,4 +127,4 @@ def _exif_gps(exif: Image.Exif) -> tuple[float, float] | None:
 
 def _dms_to_degrees(dms) -> float:
     d, m, s = (float(x) for x in dms)
-    return d + m / 60 + s / 3600
+    return round(d + m / 60 + s / 3600, 7)  # ~1 cm; usuwa szum zmiennoprzecinkowy

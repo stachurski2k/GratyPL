@@ -40,8 +40,16 @@ def get_summary(session: Session, week_start: date) -> WeeklySummary:
     return summary
 
 
-def generate_summary(session: Session, week_start: date, force: bool = False) -> WeeklySummary:
-    """Tworzy raport tygodnia; istniejący zastępuje tylko przy force=True (inaczej Conflict)."""
+def generate_summary(
+    session: Session,
+    week_start: date,
+    force: bool = False,
+    generated_at: datetime | None = None,
+) -> WeeklySummary:
+    """Tworzy raport tygodnia; istniejący zastępuje tylko przy force=True (inaczej Conflict).
+
+    generated_at domyślnie to teraz; seeder ustawia go na chwilę po końcu tygodnia.
+    """
     start, end = week_bounds(week_start)
     if start > datetime.now(timezone.utc):
         raise InvalidInput("Nie można wygenerować raportu dla tygodnia, który się jeszcze nie zaczął.")
@@ -77,6 +85,8 @@ def generate_summary(session: Session, week_start: date, force: bool = False) ->
             bbox=_bbox(reports),
             snapshot=snapshot,
         )
+        if generated_at is not None:
+            summary.generated_at = generated_at
         session.add(summary)
         session.commit()
     except Exception:
