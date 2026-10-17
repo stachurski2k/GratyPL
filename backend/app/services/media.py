@@ -4,17 +4,15 @@ import io
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 
 from PIL import ExifTags, Image, ImageOps, UnidentifiedImageError
 
-from app.config import settings
+from app.config import WARSAW, settings
 from app.services.errors import InvalidInput
 
 MAX_PHOTO_BYTES = 10 * 1024 * 1024
 THUMB_SIZE = 480
 ALLOWED_FORMATS = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}
-WARSAW = ZoneInfo("Europe/Warsaw")
 
 
 @dataclass
@@ -78,6 +76,13 @@ def store_photo(photo: ParsedPhoto, directory: str, stem: str) -> StoredPhoto:
         thumb.thumbnail((THUMB_SIZE, THUMB_SIZE))
         thumb.save(settings.media_root / thumb_path, "JPEG", quality=85)
     return StoredPhoto(path=path, thumb_path=thumb_path)
+
+
+def copy_file(src: str, dest: str) -> None:
+    """Kopiuje plik w obrębie MEDIA_ROOT (ścieżki względne)."""
+    target = settings.media_root / dest
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(settings.media_root / src, target)
 
 
 def remove_dir(directory: str) -> None:

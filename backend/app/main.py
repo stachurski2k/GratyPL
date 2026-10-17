@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import feed, reports
+from app.api import feed, reports, summaries
 from app.config import settings
 from app.services.errors import Conflict, InvalidInput, NotFound, ServiceError
 
@@ -25,6 +25,7 @@ def create_app() -> FastAPI:
 
     app.include_router(reports.router)
     app.include_router(feed.router)
+    app.include_router(summaries.router)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

@@ -1,6 +1,10 @@
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Strefa, w której liczymy tygodnie raportów i interpretujemy czas z EXIF.
+WARSAW = ZoneInfo("Europe/Warsaw")
 
 
 class Settings(BaseSettings):
