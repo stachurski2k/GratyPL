@@ -1,98 +1,161 @@
-# gratyPL (demo)
+# gratyPL
 
-Projekt społeczny dokumentujący porzucone i rozbierane samochody („graty”) w Gliwicach, Zabrzu i okolicach.
-Mieszkańcy zgłaszają wraki (zdjęcie + lokalizacja), zgłoszenia trafiają na mapę i do listy postów,
-a raz w tygodniu powstaje raport podsumowujący.
+**gratyPL** to projekt społeczny dokumentujący porzucone i rozbierane samochody („graty”) w Gliwicach, Zabrzu i okolicach.
 
-To jest **wersja demonstracyjna (proof of concept)**: pokazuje ideę, nie jest gotowym produktem.
-Nie ma kont użytkowników, logowania ani zabezpieczeń, więc nie wystawiaj jej publicznie w tej postaci.
+Nielegalne „warsztaty” i handlarze pozbywają się rozebranych aut, zostawiając je na parkingach, nieużytkach i w lasach. Pojedyncze zgłoszenia łatwo zbyć, ale zebrane razem, na mapie i w czasie, pokazują skalę problemu i wzorce, których nie da się zignorować. gratyPL zbiera fakty (miejsce, czas, zdjęcie, stan pojazdu) i przekazuje je właściwym służbom. Nie wskazuje winnych.
 
-## Co potrafi
+> **Status:** wersja demo (proof of concept). Pokazuje ideę i podstawowy przepływ danych. Nie jest przeznaczona do użytku produkcyjnego: nie ma kont użytkowników ani zabezpieczeń.
 
-- dodawanie zgłoszenia ze zdjęciami (1–5), z punktem wybranym na mapie, z geolokalizacji przeglądarki
-  albo z danych GPS zapisanych w zdjęciu (EXIF),
-- strumień postów: zgłoszenia i raporty tygodniowe w jednym feedzie,
-- mapa wszystkich zgłoszeń (OpenStreetMap) z podglądem po kliknięciu,
-- usuwanie zgłoszeń po potwierdzeniu,
-- ręczne generowanie raportu za wybrany tydzień (poniedziałek–niedziela, czas polski),
-- serwer MCP, przez który agent AI może czytać zgłoszenia i raporty oraz usuwać zgłoszenia.
+## Co potrafi demo
 
-## Uruchomienie
+- **Zgłaszanie grata** ze zdjęciami i lokalizacją (wybór punktu na mapie, geolokalizacja przeglądarki albo GPS z EXIF zdjęcia).
+- **Feed postów**: zgłoszenia i raporty tygodniowe w jednym strumieniu, w stylu mediów społecznościowych.
+- **Mapa zgłoszeń** na podkładzie OpenStreetMap.
+- **Usuwanie zgłoszeń** po potwierdzeniu.
+- **Raporty tygodniowe** generowane ręcznie. Każdy raport jest samodzielną migawką danych z danego tygodnia.
+- **Serwer MCP**, przez który agenci AI mogą przeglądać zgłoszenia i raporty oraz usuwać zgłoszenia.
+- **Strona o projekcie** z krótkim wideo.
 
-Wymagany jest Docker z Docker Compose.
+## Stack
+
+| Warstwa | Technologia |
+| --- | --- |
+| Baza danych | PostgreSQL + PostGIS |
+| Backend | Python, FastAPI, SQLAlchemy 2, GeoAlchemy2, Alembic, Pillow |
+| Agenci AI | MCP (oficjalne SDK `mcp` 2.x, `MCPServer`) w tej samej aplikacji co API |
+| Frontend | React + TypeScript (Vite), Leaflet + OpenStreetMap |
+| Uruchamianie | Docker Compose |
+
+Projekt nie korzysta z zewnętrznych usług poza kafelkami mapy OpenStreetMap.
+
+## Architektura
+
+```
+React (SPA)  ──HTTP──►  FastAPI ─┐
+Agent AI     ──MCP───►  MCP ─────┼──►  services/  ──►  PostgreSQL + PostGIS
+                                  │                    + pliki zdjęć (MEDIA_ROOT)
+```
+
+Logika biznesowa znajduje się w jednej warstwie serwisowej, z której korzystają zarówno endpointy REST, jak i narzędzia MCP.
+
+Najważniejsze konwencje:
+- współrzędne w API zawsze w kolejności GeoJSON/PostGIS, `[lng, lat]`, SRID 4326,
+- tygodnie raportów liczone od poniedziałku w strefie `Europe/Warsaw`,
+- usuwanie zgłoszeń to soft delete, a raporty tygodniowe przechowują kopię danych, więc późniejsze usunięcie zgłoszenia ich nie zmienia.
+
+Szczegółowa specyfikacja (model danych, endpointy, testy) jest w [`CLAUDE.md`](CLAUDE.md).
+
+## Szybki start
+
+Wymagania: Docker z Docker Compose.
 
 ```bash
-docker compose up -d --build
+git clone <adres-repozytorium> gratypl
+cd gratypl
+docker compose up -d --build   # migracje bazy uruchamiają się same przy starcie backendu
+
+# dane demo (zgłoszenia z zastępczymi zdjęciami „DEMO” i raporty tygodniowe)
 docker compose exec backend python -m scripts.seed
 ```
 
-Potem otwórz:
+Seeder pomija tworzenie, jeśli dane demo już są. `--reset` usuwa poprzednie dane demo (tylko je, ręczne zgłoszenia
+zostają) i tworzy je od nowa: `docker compose exec backend python -m scripts.seed --reset`.
+Pełne wyczyszczenie bazy i zdjęć: `docker compose down -v`.
 
-| Adres | Co to jest |
-| --- | --- |
-| http://localhost:5173 | aplikacja (frontend) |
-| http://localhost:8000/docs | dokumentacja REST API |
-| http://localhost:8000/mcp | serwer MCP dla agentów AI |
+Po uruchomieniu (domyślne porty, do zmiany w `docker-compose.yml`):
+- frontend: http://localhost:5173
+- API i dokumentacja OpenAPI: http://localhost:8000/docs
+- MCP: http://localhost:8000/mcp
+- baza PostGIS z hosta: `localhost:5433` (użytkownik, hasło i baza: `gratypl`)
 
-Baza PostgreSQL + PostGIS jest dostępna z hosta na porcie `5433` (użytkownik, hasło i baza: `gratypl`).
-Migracje uruchamiają się same przy starcie backendu.
+Kod frontendu jest zamontowany w kontenerze, więc zmiany przeładowują się na żywo.
 
-### Dane demo
+> Geolokalizacja przeglądarki działa tylko na HTTPS lub `localhost`. Przy testach z telefonu w sieci lokalnej wybieraj punkt na mapie.
 
-Seeder tworzy ok. 15 przykładowych zgłoszeń w Gliwicach i Zabrzu z ostatnich trzech tygodni oraz raporty
-tygodniowe dla tych tygodni. Zdjęcia to wygenerowane obrazki z napisem „DEMO”, a w interfejsie zgłoszenia
-są oznaczone jako „Dane przykładowe”.
+## API w skrócie
 
-```bash
-docker compose exec backend python -m scripts.seed           # pomija, jeśli dane demo już są
-docker compose exec backend python -m scripts.seed --reset   # usuwa dane demo i tworzy je od nowa
-```
+| Metoda | Ścieżka | Opis |
+| --- | --- | --- |
+| `POST` | `/api/reports` | nowe zgłoszenie (multipart: zdjęcia, współrzędne, opis) |
+| `GET` | `/api/reports/{id}` | jedno zgłoszenie |
+| `DELETE` | `/api/reports/{id}` | usunięcie zgłoszenia |
+| `GET` | `/api/reports/geojson?bbox=…` | zgłoszenia w obszarze mapy jako GeoJSON |
+| `GET` | `/api/feed` | strumień postów (zgłoszenia + raporty), paginacja kursorowa |
+| `GET` | `/api/summaries/{week_start}` | raport tygodniowy |
+| `POST` | `/api/summaries/generate?week_start=…` | ręczne wygenerowanie raportu |
 
-`--reset` usuwa tylko dane demo; zgłoszenia dodane ręcznie zostają.
+## Narzędzia MCP
 
-Żeby wyczyścić wszystko (bazę i zdjęcia): `docker compose down -v`.
+`list_feed`, `get_report`, `get_reports_in_area`, `get_weekly_summary`, `delete_report`.
 
-## Agent AI przez MCP
+W demo zgłoszenia dodaje się wyłącznie przez frontend.
 
-Serwer MCP udostępnia narzędzia: `list_feed`, `get_report`, `get_reports_in_area`, `get_weekly_summary`
-i `delete_report`. Dodawania zgłoszeń przez MCP celowo nie ma.
-
-Przykład dla Claude Code:
+Podłączenie agenta, np. w Claude Code:
 
 ```bash
 claude mcp add --transport http gratypl http://localhost:8000/mcp
 ```
 
-Serwer przyjmuje połączenia tylko z `localhost` (ochrona przed DNS rebinding z SDK MCP).
+Serwer przyjmuje połączenia tylko z `localhost` (ochrona przed DNS rebinding w SDK MCP).
 
-## Rozwój i testy
+## Struktura repozytorium
 
-Stos: PostgreSQL + PostGIS, Python (FastAPI, SQLAlchemy 2, GeoAlchemy2, Alembic, Pillow, SDK `mcp`),
-React + TypeScript (Vite, Leaflet). Kod frontendu jest zamontowany w kontenerze, więc zmiany przeładowują się
-na żywo.
+```
+backend/    FastAPI, serwisy, MCP, migracje, seeder, testy
+frontend/   aplikacja React, wideo o projekcie w public/
+docker-compose.yml
+CLAUDE.md   specyfikacja projektu
+```
 
-Testy backendu działają na prawdziwej bazie PostGIS (osobny kontener `db-test`):
+## Testy
+
+Backend (testy działają na prawdziwej bazie PostGIS w osobnym kontenerze `db-test`):
 
 ```bash
 docker compose --profile test up -d db-test
-cd backend && uv run pytest
-# albo w kontenerze:
 docker compose --profile test run --rm backend pytest
+# albo lokalnie: cd backend && uv run pytest
 ```
 
 Frontend:
 
 ```bash
-cd frontend
-npm install
-npx vitest run
-npm run build
+cd frontend && npm install && npx vitest run && npm run build
 ```
 
-Konwencje projektu (format współrzędnych `[lng, lat]`, strefa czasowa raportów, soft delete itd.)
-są opisane w [`CLAUDE.md`](CLAUDE.md).
+## Planowane w pełnej wersji
 
-## Mapy
+Demo celowo pomija wiele elementów. W pełnej wersji planujemy:
 
-Mapy korzystają z kafelków © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors,
-zgodnie z [zasadami użycia kafelków OSM](https://operations.osmfoundation.org/policies/tiles/).
+**Użytkownicy i bezpieczeństwo**
+- konta użytkowników, role (zgłaszający, moderator, administrator) i uprawnienia do usuwania,
+- uwierzytelnianie API i MCP, ochrona przed spamem i nadużyciami (limity zgłoszeń, walidacja treści),
+- dwuetapowe usuwanie przez agentów AI (podgląd i potwierdzenie) oraz traktowanie treści zgłoszeń jako danych, a nie poleceń.
+
+**Moderacja i jakość danych**
+- statusy zgłoszeń (oczekujące, zatwierdzone, odrzucone) i kolejka moderacji,
+- automatyczne odrzucanie zgłoszeń bez zdjęcia lub lokalizacji,
+- wykrywanie duplikatów tego samego wraku (podobieństwo zdjęć + odległość geograficzna).
+
+**Prywatność**
+- automatyczne rozmywanie tablic rejestracyjnych i twarzy przed publikacją,
+- minimalny zakres przechowywanych danych zgodnie z RODO.
+
+**Analiza**
+- wykrywanie skupisk zgłoszeń (np. DBSCAN) i mapa ciepła,
+- rozkład zgłoszeń w czasie (dni tygodnia, godziny),
+- śledzenie stanu tego samego wraku w kolejnych zgłoszeniach (przyjechał rozebrany czy jest rozbierany na miejscu).
+
+**Raporty i kontakt ze służbami**
+- automatyczne generowanie raportów tygodniowych według harmonogramu,
+- gotowy tekst podsumowania i obraz mapy do publikacji w grupie na Facebooku,
+- wskazywanie właściwego organu dla zgłoszenia (straż miejska, gmina, WIOŚ, zarządca terenu, policja),
+- zestawienia dla służb i śledzenie statusu odpowiedzi.
+
+**Zgłaszanie**
+- dodawanie zgłoszeń przez MCP i ewentualnie inne kanały,
+- wygodniejsza wersja mobilna.
+
+## Wkład i kontakt
+
+Projekt jest na wczesnym etapie. Pomysły i uwagi mile widziane w zgłoszeniach (issues) repozytorium.
