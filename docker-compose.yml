@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: gratypl
+      POSTGRES_PASSWORD: gratypl
+      POSTGRES_DB: gratypl
+    ports:
+      - "5433:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gratypl -d gratypl"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Osobna, ulotna baza do pytest (dane w tmpfs, kasowane przy restarcie).
+  db-test:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: gratypl
+      POSTGRES_PASSWORD: gratypl
+      POSTGRES_DB: gratypl_test
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gratypl -d gratypl_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    profiles: ["test"]
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://gratypl:gratypl@db:5432/gratypl
+      TEST_DATABASE_URL: postgresql+psycopg://gratypl:gratypl@db-test:5432/gratypl_test
+      MEDIA_ROOT: /data/media
+    ports:
+      - "8000:8000"
+    volumes:
+      - media-data:/data/media
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  media-data:

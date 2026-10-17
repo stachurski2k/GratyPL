@@ -1,0 +1,29 @@
+[project]
+name = "gratypl-backend"
+version = "0.1.0"
+description = "gratyPL demo: backend (FastAPI + PostGIS)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+    "sqlalchemy>=2.0",
+    "geoalchemy2",
+    "psycopg[binary]",
+    "alembic",
+    "pydantic-settings",
+    "pillow",
+    "mcp",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "httpx",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
